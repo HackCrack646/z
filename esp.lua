@@ -1,239 +1,98 @@
--- Clean Highlight ESP (Legit Style + Tool + TeamCheck)
+-- ================= RAYFIELD =================
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+-- ================= ESP LIB (LOADSTRING) =================
+local ESP = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/HackCrack646/z/refs/heads/main/esp.lua"
+))()
 
-local ESP = {}
+-- ================= WINDOW =================
+local Window = Rayfield:CreateWindow({
+    Name = "ESP Controller",
+    LoadingTitle = "ESP",
+    LoadingSubtitle = "Rayfield UI",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "ESP_UI",
+        FileName = "ESP_Config"
+    },
+    Discord = { Enabled = false },
+    KeySystem = false
+})
 
-ESP.Enabled = true
-ESP.Color = Color3.fromRGB(255, 255, 255)
-ESP.OutlineColor = Color3.fromRGB(255, 255, 255)
-ESP.Transparency = 0.9
-ESP.OutlineEnabled = true
-ESP.TeamCheck = false -- se true, muda cor do Fill e Outline pro time do jogador
+-- ================= TAB =================
+local Tab = Window:CreateTab("ESP", 4483362458)
 
--- ================= UTILS =================
+-- ================= TOGGLES =================
 
-local function getEquippedTool(char)
-    for _,v in ipairs(char:GetChildren()) do
-        if v:IsA("Tool") then
-            return v.Name
-        end
+-- ESP ON/OFF
+Tab:CreateToggle({
+    Name = "ESP Enabled",
+    CurrentValue = ESP.Enabled,
+    Flag = "ESPEnabled",
+    Callback = function(v)
+        ESP.SetEnabled(v)
     end
-    return nil
-end
+})
 
-local function getTeamColor(player)
-    if player.Team then
-        return player.Team.TeamColor.Color
-    else
-        return ESP.Color
+-- OUTLINE ON/OFF
+Tab:CreateToggle({
+    Name = "Outline Enabled",
+    CurrentValue = ESP.OutlineEnabled,
+    Flag = "ESPOutline",
+    Callback = function(v)
+        ESP.SetOutlineEnabled(v)
     end
-end
+})
 
-local function clear(player)
-    if not player.Character then return end
-
-    local char = player.Character
-
-    local hl = char:FindFirstChild("ESP_HL")
-    if hl then hl:Destroy() end
-
-    local head = char:FindFirstChild("Head")
-    if head then
-        local tag = head:FindFirstChild("ESP_Tag")
-        if tag then tag:Destroy() end
+-- TEAM CHECK
+Tab:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = ESP.TeamCheck,
+    Flag = "ESPTeamCheck",
+    Callback = function(v)
+        ESP.SetTeamCheck(v)
     end
-end
+})
 
--- ================= CREATE =================
+-- ================= COLORS =================
 
-local function create(player)
-    if not ESP.Enabled then return end
-    if player == LocalPlayer then return end
-    if not player.Character then return end
-    if player.Character:FindFirstChild("ESP_HL") then return end
-
-    -- Highlight
-    local hl = Instance.new("Highlight")
-    hl.Name = "ESP_HL"
-    hl.Adornee = player.Character
-
-    -- Se team check ativo, cor do time
-    local fillColor = ESP.TeamCheck and getTeamColor(player) or ESP.Color
-    local outlineColor = ESP.TeamCheck and getTeamColor(player) or ESP.OutlineColor
-
-    hl.FillColor = fillColor
-    hl.OutlineColor = outlineColor
-    hl.FillTransparency = ESP.Transparency
-    hl.OutlineTransparency = ESP.OutlineEnabled and 0 or 1
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Parent = player.Character
-
-    -- NameTag
-    local head = player.Character:FindFirstChild("Head")
-    if head and not head:FindFirstChild("ESP_Tag") then
-        local gui = Instance.new("BillboardGui")
-        gui.Name = "ESP_Tag"
-        gui.Adornee = head
-        gui.Size = UDim2.fromOffset(140, 32)
-        gui.StudsOffset = Vector3.new(0, 2.4, 0)
-        gui.AlwaysOnTop = true
-        gui.Parent = head
-
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.fromScale(1, 1)
-        label.BackgroundTransparency = 1
-        label.TextWrapped = true
-        label.TextScaled = true
-        label.Font = Enum.Font.Gotham
-        label.TextStrokeTransparency = 0.85
-        label.TextColor3 = fillColor
-        label.Text = ""
-        label.Parent = gui
+-- FILL COLOR
+Tab:CreateColorPicker({
+    Name = "ESP Color",
+    Color = ESP.Color,
+    Flag = "ESPColor",
+    Callback = function(c)
+        ESP.SetColor(c)
     end
-end
+})
 
--- ================= UPDATE =================
-
-local function update(player)
-    if not ESP.Enabled then return end
-    if player == LocalPlayer then return end
-    if not player.Character then return end
-
-    local char = player.Character
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local head = char:FindFirstChild("Head")
-    if not root or not hum or not head then return end
-
-    -- NameTag
-    local tag = head:FindFirstChild("ESP_Tag")
-    if tag then
-        local label = tag:FindFirstChildOfClass("TextLabel")
-        if label and LocalPlayer.Character and LocalPlayer.Character.PrimaryPart then
-            local dist = (LocalPlayer.Character.PrimaryPart.Position - root.Position).Magnitude
-            local tool = getEquippedTool(char)
-
-            if tool then
-                label.Text = string.format(
-                    "%s [%dm]\n%s",
-                    player.Name,
-                    math.floor(dist),
-                    tool
-                )
-            else
-                label.Text = string.format(
-                    "%s [%dm]",
-                    player.Name,
-                    math.floor(dist)
-                )
-            end
-
-            -- Atualiza cor se TeamCheck ativo
-            local color = ESP.TeamCheck and getTeamColor(player) or ESP.Color
-            label.TextColor3 = color
-        end
-    end
-
-    -- Highlight
-    local hl = char:FindFirstChild("ESP_HL")
-    if hl then
-        hl.Enabled = hum.Health > 0
-        hl.FillColor = ESP.TeamCheck and getTeamColor(player) or ESP.Color
-        hl.OutlineColor = ESP.TeamCheck and getTeamColor(player) or ESP.OutlineColor
-        hl.OutlineTransparency = ESP.OutlineEnabled and 0 or 1
-    end
-end
-
--- ================= PLAYER HOOK =================
-
-local function setup(player)
-    if player == LocalPlayer then return end
-
-    player.CharacterAdded:Connect(function()
-        task.wait(0.1)
-        create(player)
-    end)
-
-    if player.Character then
-        create(player)
-    end
-end
-
-for _,p in ipairs(Players:GetPlayers()) do
-    setup(p)
-end
-
-Players.PlayerAdded:Connect(setup)
-Players.PlayerRemoving:Connect(clear)
-
--- ================= LOOP =================
-
-task.spawn(function()
-    while true do
-        for _,p in ipairs(Players:GetPlayers()) do
-            update(p)
-        end
-        task.wait(0.35)
-    end
-end)
-
--- ================= API =================
-
-function ESP.SetEnabled(v)
-    ESP.Enabled = v
-    for _,p in ipairs(Players:GetPlayers()) do
-        if v then
-            create(p)
-        else
-            clear(p)
-        end
-    end
-end
-
-function ESP.SetColor(c)
-    ESP.Color = c
-end
-
-function ESP.SetTransparency(v)
-    ESP.Transparency = v
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p.Character and p.Character:FindFirstChild("ESP_HL") then
-            p.Character.ESP_HL.FillTransparency = v
-        end
-    end
-end
-
-function ESP.SetOutlineEnabled(v)
-    ESP.OutlineEnabled = v
-    for _,p in ipairs(Players:GetPlayers()) do
-        local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
-        if hl then
-            hl.OutlineTransparency = v and 0 or 1
-        end
-    end
-end
-
-function ESP.SetTeamCheck(v)
-    ESP.TeamCheck = v
-    for _,p in ipairs(Players:GetPlayers()) do
-        local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
-        local head = p.Character and p.Character:FindFirstChild("Head")
-        if hl then
-            hl.FillColor = v and getTeamColor(p) or ESP.Color
-            hl.OutlineColor = v and getTeamColor(p) or ESP.OutlineColor
-        end
-        if head then
-            local tag = head:FindFirstChild("ESP_Tag")
-            if tag then
-                local label = tag:FindFirstChildOfClass("TextLabel")
-                if label then
-                    label.TextColor3 = v and getTeamColor(p) or ESP.Color
-                end
+-- OUTLINE COLOR
+Tab:CreateColorPicker({
+    Name = "Outline Color",
+    Color = ESP.OutlineColor,
+    Flag = "OutlineColor",
+    Callback = function(c)
+        ESP.OutlineColor = c
+        for _,p in ipairs(game:GetService("Players"):GetPlayers()) do
+            local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
+            if hl and not ESP.TeamCheck then -- só atualiza se TeamCheck não estiver ativo
+                hl.OutlineColor = c
             end
         end
     end
-end
+})
 
-return ESP
+-- ================= SLIDERS =================
+
+-- TRANSPARENCY
+Tab:CreateSlider({
+    Name = "ESP Transparency",
+    Range = {0, 1},
+    Increment = 0.05,
+    CurrentValue = ESP.Transparency,
+    Flag = "ESPTransparency",
+    Callback = function(v)
+        ESP.SetTransparency(v)
+    end
+})
