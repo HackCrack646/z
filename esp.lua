@@ -1,4 +1,4 @@
--- Clean Highlight ESP (Legit Style + Tool)
+-- Clean Highlight ESP (Legit Style + Tool + TeamCheck)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -9,7 +9,8 @@ ESP.Enabled = true
 ESP.Color = Color3.fromRGB(255, 255, 255)
 ESP.OutlineColor = Color3.fromRGB(255, 255, 255)
 ESP.Transparency = 0.9
-ESP.OutlineEnabled = true -- se true, o outline aparece; se false, desaparece
+ESP.OutlineEnabled = true
+ESP.TeamCheck = false -- se true, muda cor do Fill e Outline pro time do jogador
 
 -- ================= UTILS =================
 
@@ -20,6 +21,14 @@ local function getEquippedTool(char)
         end
     end
     return nil
+end
+
+local function getTeamColor(player)
+    if player.Team then
+        return player.Team.TeamColor.Color
+    else
+        return ESP.Color
+    end
 end
 
 local function clear(player)
@@ -49,8 +58,13 @@ local function create(player)
     local hl = Instance.new("Highlight")
     hl.Name = "ESP_HL"
     hl.Adornee = player.Character
-    hl.FillColor = ESP.Color
-    hl.OutlineColor = ESP.OutlineColor
+
+    -- Se team check ativo, cor do time
+    local fillColor = ESP.TeamCheck and getTeamColor(player) or ESP.Color
+    local outlineColor = ESP.TeamCheck and getTeamColor(player) or ESP.OutlineColor
+
+    hl.FillColor = fillColor
+    hl.OutlineColor = outlineColor
     hl.FillTransparency = ESP.Transparency
     hl.OutlineTransparency = ESP.OutlineEnabled and 0 or 1
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -62,7 +76,7 @@ local function create(player)
         local gui = Instance.new("BillboardGui")
         gui.Name = "ESP_Tag"
         gui.Adornee = head
-        gui.Size = UDim2.fromOffset(140, 32) -- um pouco mais alto pra tool
+        gui.Size = UDim2.fromOffset(140, 32)
         gui.StudsOffset = Vector3.new(0, 2.4, 0)
         gui.AlwaysOnTop = true
         gui.Parent = head
@@ -74,7 +88,7 @@ local function create(player)
         label.TextScaled = true
         label.Font = Enum.Font.Gotham
         label.TextStrokeTransparency = 0.85
-        label.TextColor3 = ESP.Color
+        label.TextColor3 = fillColor
         label.Text = ""
         label.Parent = gui
     end
@@ -93,6 +107,7 @@ local function update(player)
     local head = char:FindFirstChild("Head")
     if not root or not hum or not head then return end
 
+    -- NameTag
     local tag = head:FindFirstChild("ESP_Tag")
     if tag then
         local label = tag:FindFirstChildOfClass("TextLabel")
@@ -114,13 +129,19 @@ local function update(player)
                     math.floor(dist)
                 )
             end
+
+            -- Atualiza cor se TeamCheck ativo
+            local color = ESP.TeamCheck and getTeamColor(player) or ESP.Color
+            label.TextColor3 = color
         end
     end
 
+    -- Highlight
     local hl = char:FindFirstChild("ESP_HL")
     if hl then
         hl.Enabled = hum.Health > 0
-        hl.FillColor = ESP.Color
+        hl.FillColor = ESP.TeamCheck and getTeamColor(player) or ESP.Color
+        hl.OutlineColor = ESP.TeamCheck and getTeamColor(player) or ESP.OutlineColor
         hl.OutlineTransparency = ESP.OutlineEnabled and 0 or 1
     end
 end
@@ -190,6 +211,27 @@ function ESP.SetOutlineEnabled(v)
         local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
         if hl then
             hl.OutlineTransparency = v and 0 or 1
+        end
+    end
+end
+
+function ESP.SetTeamCheck(v)
+    ESP.TeamCheck = v
+    for _,p in ipairs(Players:GetPlayers()) do
+        local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
+        local head = p.Character and p.Character:FindFirstChild("Head")
+        if hl then
+            hl.FillColor = v and getTeamColor(p) or ESP.Color
+            hl.OutlineColor = v and getTeamColor(p) or ESP.OutlineColor
+        end
+        if head then
+            local tag = head:FindFirstChild("ESP_Tag")
+            if tag then
+                local label = tag:FindFirstChildOfClass("TextLabel")
+                if label then
+                    label.TextColor3 = v and getTeamColor(p) or ESP.Color
+                end
+            end
         end
     end
 end
