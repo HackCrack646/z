@@ -1,0 +1,195 @@
+-- Reconstructor ESP Lib
+-- Author: Custom by You
+
+local RunService = game:GetService("RunService")
+
+local ReconESP = {}
+
+--==================== CONFIG ====================--
+ReconESP.Enabled = true
+ReconESP.ShowName = true
+ReconESP.ShowDistance = true
+ReconESP.ShowOutline = true
+ReconESP.TeamCheck = false -- usa a cor da Part como cor do time
+ReconESP.OutlineTransparency = 0
+ReconESP.FillTransparency = 0.8
+ReconESP.DefaultColor = Color3.fromRGB(255,255,255)
+--================================================--
+
+local ActiveESP = {} -- cache { [model] = {Highlight=hl, Tag=gui} }
+
+-- ================= UTILS =================
+
+local function getReconstructorColor(model)
+	local lights = model:FindFirstChild("Lights")
+	if not lights then return ReconESP.DefaultColor end
+	for _, part in ipairs(lights:GetChildren()) do
+		if part:IsA("BasePart") and part.Name == "Part" then
+			return part.Color
+		end
+	end
+	return ReconESP.DefaultColor
+end
+
+local function getDistanceText(model)
+	local localRoot = workspace.CurrentCamera -- usar a camera como referência
+	if not model.PrimaryPart then return "" end
+	local dist = (model.PrimaryPart.Position - localRoot.CFrame.Position).Magnitude
+	return string.format("[%dm]", math.floor(dist))
+end
+
+-- ================= CREATE =================
+
+local function createESP(model)
+	if not model.PrimaryPart or ActiveESP[model] then return end
+
+	local color = ReconESP.TeamCheck and getReconstructorColor(model) or ReconESP.DefaultColor
+
+	-- Highlight
+	local hl = Instance.new("Highlight")
+	hl.Name = "ReconESP_HL"
+	hl.Adornee = model
+	hl.FillColor = color
+	hl.OutlineColor = color
+	hl.FillTransparency = ReconESP.FillTransparency
+	hl.OutlineTransparency = ReconESP.ShowOutline and ReconESP.OutlineTransparency or 1
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent = model
+
+	-- Name Tag
+	local gui
+	if ReconESP.ShowName or ReconESP.ShowDistance then
+		local head = model.PrimaryPart
+		gui = Instance.new("BillboardGui")
+		gui.Name = "ReconESP_Tag"
+		gui.Adornee = head
+		gui.Size = UDim2.fromOffset(140,32)
+		gui.StudsOffset = Vector3.new(0,3,0)
+		gui.AlwaysOnTop = true
+		gui.Parent = head
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1,1)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.Font = Enum.Font.Gotham
+		label.TextStrokeTransparency = 0.85
+		label.TextColor3 = color
+		label.Text = ReconESP.ShowName and "Reconstructor" or ""
+		label.Parent = gui
+	end
+
+	ActiveESP[model] = {
+		Highlight = hl,
+		Tag = gui
+	}
+end
+
+-- ================= UPDATE =================
+
+local function updateESP(model)
+	if not model.PrimaryPart then return end
+	local data = ActiveESP[model]
+	if not data then
+		createESP(model)
+		data = ActiveESP[model]
+	end
+	local color = ReconESP.TeamCheck and getReconstructorColor(model) or ReconESP.DefaultColor
+
+	-- Update Highlight
+	if data.Highlight then
+		data.Highlight.FillColor = color
+		data.Highlight.OutlineColor = color
+		data.Highlight.OutlineTransparency = ReconESP.ShowOutline and ReconESP.OutlineTransparency or 1
+		data.Highlight.FillTransparency = ReconESP.FillTransparency
+	end
+
+	-- Update Name/Distance
+	if data.Tag then
+		local label = data.Tag:FindFirstChildOfClass("TextLabel")
+		if label then
+			local txt = ""
+			if ReconESP.ShowName then txt = "Reconstructor" end
+			if ReconESP.ShowDistance then txt = txt ~= "" and txt.." "..getDistanceText(model) or getDistanceText(model) end
+			label.Text = txt
+			label.TextColor3 = color
+		end
+	end
+end
+
+-- ================= REMOVE =================
+
+local function removeESP(model)
+	local data = ActiveESP[model]
+	if data then
+		if data.Highlight then data.Highlight:Destroy() end
+		if data.Tag then data.Tag:Destroy() end
+		ActiveESP[model] = nil
+	end
+end
+
+-- ================= MAIN LOOP =================
+
+RunService.Heartbeat:Connect(function()
+	if not ReconESP.Enabled then
+		for model,_ in pairs(ActiveESP) do
+			removeESP(model)
+		end
+		return
+	end
+
+	local plotsFolder = workspace:FindFirstChild("Plots")
+	if not plotsFolder then return end
+
+	for _, recon in ipairs(plotsFolder:GetChildren()) do
+		if recon:IsA("Model") and recon.Name == "Reconstructor" then
+			local lights = recon:FindFirstChild("Lights")
+			if lights then
+				local hasPart = false
+				for _, part in ipairs(lights:GetChildren()) do
+					if part:IsA("BasePart") and part.Name == "Part" then
+						hasPart = true
+						break
+					end
+				end
+				if hasPart then
+					updateESP(recon)
+				else
+					removeESP(recon)
+				end
+			else
+				removeESP(recon)
+			end
+		else
+			removeESP(recon)
+		end
+	end
+end)
+
+-- ================= API =================
+
+function ReconESP.SetEnabled(v)
+	ReconESP.Enabled = v
+end
+
+function ReconESP.SetShowName(v)
+	ReconESP.ShowName = v
+end
+
+function ReconESP.SetShowDistance(v)
+	ReconESP.ShowDistance = v
+end
+
+function ReconESP.SetShowOutline(v)
+	ReconESP.ShowOutline = v
+end
+
+function ReconESP.SetTeamCheck(v)
+	ReconESP.TeamCheck = v
+end
+
+function ReconESP.SetColor(c)
+	ReconESP.DefaultColor = c
+end
+
+return ReconESP
