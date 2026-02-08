@@ -1,4 +1,3 @@
-
 local AirdropLib = {}
 AirdropLib.__index = AirdropLib
 
@@ -22,9 +21,8 @@ local DEFAULT_CONFIG = {
     detectionBoxSize = Vector3.new(16, 8, 16),
     distanceUnit = "studs",
     detectionBoxTransparency = 0,
-    espUpdateFrequency = "RenderStepped", -- ou "Heartbeat"
+    espUpdateFrequency = "RenderStepped",
     notificationsEnabled = true,
-    debugMode = false
 }
 
 -- ============================================
@@ -110,8 +108,7 @@ local function safeLower(s)
     return string.lower(s)
 end
 
-function AirdropLib:_log(message, debugOnly)
-    if debugOnly and not self.config.debugMode then return end
+function AirdropLib:_log(message)
     print("[AirdropLib] " .. message)
 end
 
@@ -144,14 +141,32 @@ function AirdropLib:_getModelPosition(model)
 end
 
 -- ============================================
--- NOMEAÇÃO SEQUENCIAL
+-- NOMEAÇÃO SEQUENCIAL - AIRDROPS
 -- ============================================
 function AirdropLib:RefreshAirdropNames()
     self.airdropModels = {}
+    
+    -- MÉTODO 1: Buscar apenas em Workspace direto (como o script original)
     for _, obj in ipairs(Workspace:GetChildren()) do
         if obj:IsA("Model") and obj.Name == self.config.airdropModelName then
             table.insert(self.airdropModels, obj)
         end
+    end
+
+    -- MÉTODO 2 (ALTERNATIVO): Se não encontrar, buscar recursivamente
+    if #self.airdropModels == 0 then
+        self:_log("⚠️ Nenhum airdrop encontrado em Workspace direto, buscando recursivamente...")
+        local function findAirdrops(parent)
+            for _, obj in ipairs(parent:GetChildren()) do
+                if obj:IsA("Model") and obj.Name == self.config.airdropModelName then
+                    table.insert(self.airdropModels, obj)
+                end
+                if obj:IsA("Folder") or (obj:IsA("Model") and obj.Name ~= self.config.airdropModelName) then
+                    findAirdrops(obj)
+                end
+            end
+        end
+        findAirdrops(Workspace)
     end
 
     table.sort(self.airdropModels, function(a, b)
@@ -167,7 +182,6 @@ function AirdropLib:RefreshAirdropNames()
         local label = "airdrop" .. tostring(i)
         self.airdropAssignedNames[model] = label
         
-        -- Armazena no model para persistência
         local sv = model:FindFirstChild("AirdropLabel")
         if not sv or not sv:IsA("StringValue") then
             if sv then sv:Destroy() end
@@ -183,12 +197,33 @@ function AirdropLib:RefreshAirdropNames()
     self:_log("Nomes de Airdrops atualizados: " .. #self.airdropModels)
 end
 
+-- ============================================
+-- NOMEAÇÃO SEQUENCIAL - DROPSHIPS
+-- ============================================
 function AirdropLib:RefreshDropshipNames()
     self.dropshipParts = {}
+    
+    -- MÉTODO 1: Buscar apenas em Workspace direto (como o script original)
     for _, obj in ipairs(Workspace:GetChildren()) do
         if obj:IsA("BasePart") and safeLower(obj.Name) == safeLower(self.config.dropshipPartName) then
             table.insert(self.dropshipParts, obj)
         end
+    end
+
+    -- MÉTODO 2 (ALTERNATIVO): Se não encontrar, buscar recursivamente
+    if #self.dropshipParts == 0 then
+        self:_log("⚠️ Nenhum dropship encontrado em Workspace direto, buscando recursivamente...")
+        local function findDropships(parent)
+            for _, obj in ipairs(parent:GetChildren()) do
+                if obj:IsA("BasePart") and safeLower(obj.Name) == safeLower(self.config.dropshipPartName) then
+                    table.insert(self.dropshipParts, obj)
+                end
+                if obj:IsA("Folder") or obj:IsA("Model") then
+                    findDropships(obj)
+                end
+            end
+        end
+        findDropships(Workspace)
     end
 
     table.sort(self.dropshipParts, function(a, b)
