@@ -1,8 +1,3 @@
---[[
-    AirdropLib - Biblioteca modular para detecção de Airdrops e Dropships
-    Integra-se com qualquer UI (Rayfield, Kavo, etc)
-    Todas as opções são ativáveis/desativáveis e configuráveis
-]]
 
 local AirdropLib = {}
 AirdropLib.__index = AirdropLib
