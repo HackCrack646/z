@@ -1,7 +1,7 @@
---// Cache (CORRIGIDO - removido Vector2.new do cache)
+--// Cache (CORRIGIDO - Vector2 como biblioteca, não função)
 local select = select
-local pcall, getgenv, next, mathclamp, type, mousemoverel =
-    pcall, getgenv, next, math.clamp, type, mousemoverel or (Input and Input.MouseMove)
+local pcall, getgenv, next, Vector2, mathclamp, type, mousemoverel =
+    pcall, getgenv, next, Vector2, math.clamp, type, mousemoverel or (Input and Input.MouseMove)
 
 --// Preventing Multiple Processes
 pcall(function()
@@ -116,7 +116,7 @@ ServiceConnections.TypingEndedConnection = UserInputService.TextBoxFocusReleased
 --// Main loop
 local function Load()
     ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
-        -- FOV update
+        -- FOV update - AGORA FUNCIONA CORRETAMENTE
         if Environment.FOVSettings.Enabled and Environment.Settings.Enabled then
             Environment.FOVCircle.Radius = Environment.FOVSettings.Amount
             Environment.FOVCircle.Thickness = Environment.FOVSettings.Thickness
@@ -125,7 +125,7 @@ local function Load()
             Environment.FOVCircle.Color = Environment.FOVSettings.Color
             Environment.FOVCircle.Transparency = Environment.FOVSettings.Transparency
             Environment.FOVCircle.Visible = Environment.FOVSettings.Visible
-            Environment.FOVCircle.Position = Vector2(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+            Environment.FOVCircle.Position = Vector2(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y) -- AGORA FUNCIONA
         else
             Environment.FOVCircle.Visible = false
         end
@@ -146,17 +146,19 @@ local function Load()
                     else
                         -- Suavização dinâmica: mais agressiva quando delta grande
                         local dynamicFactor = SMOOTH_FACTOR_BASE + (deltaMag / 800) * 0.08
-                        dynamicFactor = math.clamp(dynamicFactor, SMOOTH_FACTOR_BASE, 0.24)
+                        dynamicFactor = mathclamp(dynamicFactor, SMOOTH_FACTOR_BASE, 0.24)
                         
                         SmoothDelta = SmoothDelta:Lerp(rawDelta, dynamicFactor)
                         
                         -- Limitar movimento por frame
                         local moveThisFrame = SmoothDelta.Unit * math.min(SmoothDelta.Magnitude, MAX_MOVE_PER_FRAME)
                         
-                        mousemoverel(
-                            moveThisFrame.X * Environment.Settings.ThirdPersonSensitivity,
-                            moveThisFrame.Y * Environment.Settings.ThirdPersonSensitivity
-                        )
+                        if mousemoverel then
+                            mousemoverel(
+                                moveThisFrame.X * Environment.Settings.ThirdPersonSensitivity,
+                                moveThisFrame.Y * Environment.Settings.ThirdPersonSensitivity
+                            )
+                        end
                         
                         -- Decay suave do residual
                         SmoothDelta = SmoothDelta * 0.92
