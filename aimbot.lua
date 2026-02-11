@@ -1,13 +1,17 @@
---// Cache
+--// Cache (CORRIGIDO - removido Vector2.new do cache)
 local select = select
-local pcall, getgenv, next, Vector2, mathclamp, type, mousemoverel = select(1, pcall, getgenv, next, Vector2.new, math.clamp, type, mousemoverel or (Input and Input.MouseMove))
+local pcall, getgenv, next, mathclamp, type, mousemoverel =
+    pcall, getgenv, next, math.clamp, type, mousemoverel or (Input and Input.MouseMove)
+
 --// Preventing Multiple Processes
 pcall(function()
     getgenv().Aimbot.Functions:Exit()
 end)
+
 --// Environment
 getgenv().Aimbot = {}
 local Environment = getgenv().Aimbot
+
 --// Services
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,8 +19,10 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+
 --// Variables
 local RequiredDistance, Typing, Running, Animation, ServiceConnections = 2000, false, false, nil, {}
+
 --// Smooth variables for third person - melhorado
 local SmoothDelta = Vector2.new(0, 0)
 local SMOOTH_FACTOR_BASE = 0.135     -- base (ajuste principal: 0.08-0.22)
@@ -62,7 +68,6 @@ local function CancelLock()
 end
 
 local function GetClosestPlayer()
-    -- (mantido igual ao anterior, sem mudanças aqui)
     if not Environment.Locked then
         RequiredDistance = (Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000)
         for _, v in next, Players:GetPlayers() do
@@ -104,14 +109,14 @@ local function GetClosestPlayer()
     end
 end
 
--- Typing connections (igual)
+-- Typing connections
 ServiceConnections.TypingStartedConnection = UserInputService.TextBoxFocused:Connect(function() Typing = true end)
 ServiceConnections.TypingEndedConnection = UserInputService.TextBoxFocusReleased:Connect(function() Typing = false end)
 
 --// Main loop
 local function Load()
     ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
-        -- FOV update (igual)
+        -- FOV update
         if Environment.FOVSettings.Enabled and Environment.Settings.Enabled then
             Environment.FOVCircle.Radius = Environment.FOVSettings.Amount
             Environment.FOVCircle.Thickness = Environment.FOVSettings.Thickness
@@ -140,7 +145,7 @@ local function Load()
                         SmoothDelta = Vector2.new(0, 0)
                     else
                         -- Suavização dinâmica: mais agressiva quando delta grande
-                        local dynamicFactor = SMOOTH_FACTOR_BASE + (deltaMag / 800) * 0.08  -- max ~0.22 quando longe
+                        local dynamicFactor = SMOOTH_FACTOR_BASE + (deltaMag / 800) * 0.08
                         dynamicFactor = math.clamp(dynamicFactor, SMOOTH_FACTOR_BASE, 0.24)
                         
                         SmoothDelta = SmoothDelta:Lerp(rawDelta, dynamicFactor)
@@ -177,7 +182,7 @@ local function Load()
         end
     end)
     
-    -- Input connections (igual, com small fix no pcall)
+    -- Input connections
     ServiceConnections.InputBeganConnection = UserInputService.InputBegan:Connect(function(Input)
         if Typing then return end
         local key = Environment.Settings.TriggerKey
@@ -201,7 +206,7 @@ local function Load()
     end)
 end
 
---// Functions (igual, com reset smooth)
+--// Functions (reset)
 Environment.Functions = {}
 function Environment.Functions:Exit()
     for _, v in next, ServiceConnections do
@@ -233,7 +238,7 @@ function Environment.Functions:ResetSettings()
         DistanceCheck = true,
         MaxDistance = 500
     }
-    Environment.FOVSettings = { -- reset FOV
+    Environment.FOVSettings = {
         Enabled = true, Visible = true, Amount = 90, Color = Color3.fromRGB(255,255,255),
         LockedColor = Color3.fromRGB(255,70,70), Transparency = 0.5, Sides = 60, Thickness = 1, Filled = false
     }
