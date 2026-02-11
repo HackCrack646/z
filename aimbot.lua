@@ -17,19 +17,21 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 --// Variables
 local RequiredDistance, Typing, Running, Animation, ServiceConnections = 2000, false, false, nil, {}
---// Smooth variables for third person
+--// Smooth variables for third person - melhorado
 local SmoothDelta = Vector2.new(0, 0)
-local SMOOTH_FACTOR = 0.14          -- Ajuste principal (0.06 = bem suave / lento, 0.25 = rápido/agressivo)
+local SMOOTH_FACTOR_BASE = 0.135     -- base (ajuste principal: 0.08-0.22)
+local MAX_MOVE_PER_FRAME = 45       -- pixels max por frame (anti-flick/jitter)
+local DEADZONE = 2.5                -- se delta menor que isso, ignora (reduz tremor)
 
 --// Script Settings
 Environment.Settings = {
     Enabled = true,
     TeamCheck = false,
     AliveCheck = true,
-    WallCheck = false, -- Laggy
-    Sensitivity = 0, -- Animation length (in seconds) before fully locking onto target [FIRST PERSON]
+    WallCheck = false,
+    Sensitivity = 0, -- FIRST PERSON only
     ThirdPerson = false,
-    ThirdPersonSensitivity = 2.5, -- Multiplicador final (recomendado 1.8–3.2)
+    ThirdPersonSensitivity = 2.4, -- 1.8-3.2 recomendado
     TriggerKey = "MouseButton2",
     Toggle = false,
     LockPart = "Head",
@@ -56,10 +58,11 @@ local function CancelLock()
     Environment.Locked = nil
     if Animation then Animation:Cancel() end
     Environment.FOVCircle.Color = Environment.FOVSettings.Color
-    SmoothDelta = Vector2.new(0, 0)  -- reseta o smooth ao cancelar
+    SmoothDelta = Vector2.new(0, 0)
 end
 
 local function GetClosestPlayer()
+    -- (mantido igual ao anterior, sem mudanças aqui)
     if not Environment.Locked then
         RequiredDistance = (Environment.FOVSettings.Enabled and Environment.FOVSettings.Amount or 2000)
         for _, v in next, Players:GetPlayers() do
@@ -101,17 +104,14 @@ local function GetClosestPlayer()
     end
 end
 
---// Typing Check
-ServiceConnections.TypingStartedConnection = UserInputService.TextBoxFocused:Connect(function()
-    Typing = true
-end)
-ServiceConnections.TypingEndedConnection = UserInputService.TextBoxFocusReleased:Connect(function()
-    Typing = false
-end)
+-- Typing connections (igual)
+ServiceConnections.TypingStartedConnection = UserInputService.TextBoxFocused:Connect(function() Typing = true end)
+ServiceConnections.TypingEndedConnection = UserInputService.TextBoxFocusReleased:Connect(function() Typing = false end)
 
---// Main
+--// Main loop
 local function Load()
     ServiceConnections.RenderSteppedConnection = RunService.RenderStepped:Connect(function()
+        -- FOV update (igual)
         if Environment.FOVSettings.Enabled and Environment.Settings.Enabled then
             Environment.FOVCircle.Radius = Environment.FOVSettings.Amount
             Environment.FOVCircle.Thickness = Environment.FOVSettings.Thickness
@@ -128,25 +128,36 @@ local function Load()
         if Running and Environment.Settings.Enabled then
             GetClosestPlayer()
             
-            if Environment.Locked then
+            if Environment.Locked and Environment.Locked.Character and Environment.Locked.Character:FindFirstChild(Environment.Settings.LockPart) then
                 if Environment.Settings.ThirdPerson then
                     local targetScreen = Camera:WorldToViewportPoint(Environment.Locked.Character[Environment.Settings.LockPart].Position)
                     local mousePos = UserInputService:GetMouseLocation()
                     
-                    local currentDelta = Vector2.new(
-                        targetScreen.X - mousePos.X,
-                        targetScreen.Y - mousePos.Y
-                    )
+                    local rawDelta = Vector2.new(targetScreen.X - mousePos.X, targetScreen.Y - mousePos.Y)
+                    local deltaMag = rawDelta.Magnitude
                     
-                    -- Suavização exponencial (o mais usado e estável)
-                    SmoothDelta = SmoothDelta:Lerp(currentDelta, SMOOTH_FACTOR)
-                    
-                    mousemoverel(
-                        SmoothDelta.X * Environment.Settings.ThirdPersonSensitivity,
-                        SmoothDelta.Y * Environment.Settings.ThirdPersonSensitivity
-                    )
+                    if deltaMag < DEADZONE then
+                        SmoothDelta = Vector2.new(0, 0)
+                    else
+                        -- Suavização dinâmica: mais agressiva quando delta grande
+                        local dynamicFactor = SMOOTH_FACTOR_BASE + (deltaMag / 800) * 0.08  -- max ~0.22 quando longe
+                        dynamicFactor = math.clamp(dynamicFactor, SMOOTH_FACTOR_BASE, 0.24)
+                        
+                        SmoothDelta = SmoothDelta:Lerp(rawDelta, dynamicFactor)
+                        
+                        -- Limitar movimento por frame
+                        local moveThisFrame = SmoothDelta.Unit * math.min(SmoothDelta.Magnitude, MAX_MOVE_PER_FRAME)
+                        
+                        mousemoverel(
+                            moveThisFrame.X * Environment.Settings.ThirdPersonSensitivity,
+                            moveThisFrame.Y * Environment.Settings.ThirdPersonSensitivity
+                        )
+                        
+                        -- Decay suave do residual
+                        SmoothDelta = SmoothDelta * 0.92
+                    end
                 else
-                    -- Modo first person (mantido original)
+                    -- First person (original)
                     if Environment.Settings.Sensitivity > 0 then
                         Animation = TweenService:Create(Camera, TweenInfo.new(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
                             CFrame = CFrame.new(Camera.CFrame.Position, Environment.Locked.Character[Environment.Settings.LockPart].Position)
@@ -158,49 +169,46 @@ local function Load()
                 end
                 
                 Environment.FOVCircle.Color = Environment.FOVSettings.LockedColor
+            else
+                SmoothDelta = Vector2.new(0, 0)
             end
         else
-            SmoothDelta = Vector2.new(0, 0)  -- reseta quando não está rodando
+            SmoothDelta = Vector2.new(0, 0)
         end
     end)
     
+    -- Input connections (igual, com small fix no pcall)
     ServiceConnections.InputBeganConnection = UserInputService.InputBegan:Connect(function(Input)
-        if not Typing then
-            pcall(function()
-                if Input.KeyCode == Enum.KeyCode[Environment.Settings.TriggerKey] or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
-                    if Environment.Settings.Toggle then
-                        Running = not Running
-                        if not Running then CancelLock() end
-                    else
-                        Running = true
-                    end
-                end
-            end)
+        if Typing then return end
+        local key = Environment.Settings.TriggerKey
+        if (Input.KeyCode.Name == key or Input.UserInputType.Name == key) then
+            if Environment.Settings.Toggle then
+                Running = not Running
+                if not Running then CancelLock() end
+            else
+                Running = true
+            end
         end
     end)
     
     ServiceConnections.InputEndedConnection = UserInputService.InputEnded:Connect(function(Input)
-        if not Typing and not Environment.Settings.Toggle then
-            pcall(function()
-                if Input.KeyCode == Enum.KeyCode[Environment.Settings.TriggerKey] or Input.UserInputType == Enum.UserInputType[Environment.Settings.TriggerKey] then
-                    Running = false
-                    CancelLock()
-                end
-            end)
+        if Typing or Environment.Settings.Toggle then return end
+        local key = Environment.Settings.TriggerKey
+        if (Input.KeyCode.Name == key or Input.UserInputType.Name == key) then
+            Running = false
+            CancelLock()
         end
     end)
 end
 
---// Functions
+--// Functions (igual, com reset smooth)
 Environment.Functions = {}
 function Environment.Functions:Exit()
     for _, v in next, ServiceConnections do
         if v and v.Disconnect then v:Disconnect() end
     end
     if Environment.FOVCircle and Environment.FOVCircle.Remove then Environment.FOVCircle:Remove() end
-    getgenv().Aimbot.Functions = nil
     getgenv().Aimbot = nil
-    Load = nil; GetClosestPlayer = nil; CancelLock = nil
 end
 
 function Environment.Functions:Restart()
@@ -218,23 +226,16 @@ function Environment.Functions:ResetSettings()
         WallCheck = false,
         Sensitivity = 0,
         ThirdPerson = false,
-        ThirdPersonSensitivity = 2.5,
+        ThirdPersonSensitivity = 2.4,
         TriggerKey = "MouseButton2",
         Toggle = false,
         LockPart = "Head",
         DistanceCheck = true,
         MaxDistance = 500
     }
-    Environment.FOVSettings = {
-        Enabled = true,
-        Visible = true,
-        Amount = 90,
-        Color = Color3.fromRGB(255, 255, 255),
-        LockedColor = Color3.fromRGB(255, 70, 70),
-        Transparency = 0.5,
-        Sides = 60,
-        Thickness = 1,
-        Filled = false
+    Environment.FOVSettings = { -- reset FOV
+        Enabled = true, Visible = true, Amount = 90, Color = Color3.fromRGB(255,255,255),
+        LockedColor = Color3.fromRGB(255,70,70), Transparency = 0.5, Sides = 60, Thickness = 1, Filled = false
     }
     SmoothDelta = Vector2.new(0, 0)
 end
