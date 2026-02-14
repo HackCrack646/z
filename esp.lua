@@ -1,4 +1,4 @@
--- Clean Highlight ESP (Legit Style + Tool + TeamCheck)
+-- Clean Highlight ESP (Legit Style + Tool + TeamCheck + NameToggle)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -6,11 +6,12 @@ local LocalPlayer = Players.LocalPlayer
 local ESP = {}
 
 ESP.Enabled = true
+ESP.Names = true -- NOVA OPÇÃO: Ativar/Desativar nomes
 ESP.Color = Color3.fromRGB(255, 255, 255)
 ESP.OutlineColor = Color3.fromRGB(255, 255, 255)
 ESP.Transparency = 0.9
 ESP.OutlineEnabled = true
-ESP.TeamCheck = false -- se true, muda cor do Fill e Outline pro time do jogador
+ESP.TeamCheck = false 
 
 -- ================= UTILS =================
 
@@ -59,7 +60,6 @@ local function create(player)
     hl.Name = "ESP_HL"
     hl.Adornee = player.Character
 
-    -- Se team check ativo, cor do time
     local fillColor = ESP.TeamCheck and getTeamColor(player) or ESP.Color
     local outlineColor = ESP.TeamCheck and getTeamColor(player) or ESP.OutlineColor
 
@@ -79,6 +79,7 @@ local function create(player)
         gui.Size = UDim2.fromOffset(140, 32)
         gui.StudsOffset = Vector3.new(0, 2.4, 0)
         gui.AlwaysOnTop = true
+        gui.Enabled = ESP.Names -- Define visibilidade inicial
         gui.Parent = head
 
         local label = Instance.new("TextLabel")
@@ -110,27 +111,19 @@ local function update(player)
     -- NameTag
     local tag = head:FindFirstChild("ESP_Tag")
     if tag then
+        tag.Enabled = ESP.Names -- Atualiza se o nome deve aparecer
+        
         local label = tag:FindFirstChildOfClass("TextLabel")
         if label and LocalPlayer.Character and LocalPlayer.Character.PrimaryPart then
             local dist = (LocalPlayer.Character.PrimaryPart.Position - root.Position).Magnitude
             local tool = getEquippedTool(char)
 
             if tool then
-                label.Text = string.format(
-                    "%s [%dm]\n%s",
-                    player.Name,
-                    math.floor(dist),
-                    tool
-                )
+                label.Text = string.format("%s [%dm]\n%s", player.Name, math.floor(dist), tool)
             else
-                label.Text = string.format(
-                    "%s [%dm]",
-                    player.Name,
-                    math.floor(dist)
-                )
+                label.Text = string.format("%s [%dm]", player.Name, math.floor(dist))
             end
 
-            -- Atualiza cor se TeamCheck ativo
             local color = ESP.TeamCheck and getTeamColor(player) or ESP.Color
             label.TextColor3 = color
         end
@@ -150,21 +143,14 @@ end
 
 local function setup(player)
     if player == LocalPlayer then return end
-
     player.CharacterAdded:Connect(function()
         task.wait(0.1)
         create(player)
     end)
-
-    if player.Character then
-        create(player)
-    end
+    if player.Character then create(player) end
 end
 
-for _,p in ipairs(Players:GetPlayers()) do
-    setup(p)
-end
-
+for _,p in ipairs(Players:GetPlayers()) do setup(p) end
 Players.PlayerAdded:Connect(setup)
 Players.PlayerRemoving:Connect(clear)
 
@@ -184,24 +170,21 @@ end)
 function ESP.SetEnabled(v)
     ESP.Enabled = v
     for _,p in ipairs(Players:GetPlayers()) do
-        if v then
-            create(p)
-        else
-            clear(p)
-        end
+        if v then create(p) else clear(p) end
     end
 end
 
-function ESP.SetColor(c)
-    ESP.Color = c
+function ESP.SetNames(v) -- NOVA FUNÇÃO DA API
+    ESP.Names = v
 end
+
+function ESP.SetColor(c) ESP.Color = c end
 
 function ESP.SetTransparency(v)
     ESP.Transparency = v
     for _,p in ipairs(Players:GetPlayers()) do
-        if p.Character and p.Character:FindFirstChild("ESP_HL") then
-            p.Character.ESP_HL.FillTransparency = v
-        end
+        local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
+        if hl then hl.FillTransparency = v end
     end
 end
 
@@ -209,9 +192,7 @@ function ESP.SetOutlineEnabled(v)
     ESP.OutlineEnabled = v
     for _,p in ipairs(Players:GetPlayers()) do
         local hl = p.Character and p.Character:FindFirstChild("ESP_HL")
-        if hl then
-            hl.OutlineTransparency = v and 0 or 1
-        end
+        if hl then hl.OutlineTransparency = v and 0 or 1 end
     end
 end
 
@@ -226,12 +207,8 @@ function ESP.SetTeamCheck(v)
         end
         if head then
             local tag = head:FindFirstChild("ESP_Tag")
-            if tag then
-                local label = tag:FindFirstChildOfClass("TextLabel")
-                if label then
-                    label.TextColor3 = v and getTeamColor(p) or ESP.Color
-                end
-            end
+            local label = tag and tag:FindFirstChildOfClass("TextLabel")
+            if label then label.TextColor3 = v and getTeamColor(p) or ESP.Color end
         end
     end
 end
