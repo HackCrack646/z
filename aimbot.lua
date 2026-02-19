@@ -29,13 +29,15 @@ Environment.Settings = {
 	AliveCheck = true,
 	WallCheck = false,
 	Sensitivity = 0,
-	ThirdPerson = false,
+	ThirdPerson = true,
 	ThirdPersonSensitivity = 3,
 	TriggerKey = "MouseButton2",
 	Toggle = false,
 	LockPart = "Head",
 	DistanceCheck = true,
-	MaxDistance = 500
+	MaxDistance = 500,
+	Prediction = 0.135,
+	Smoothness = 5
 }
 
 Environment.FOVSettings = {
@@ -134,25 +136,18 @@ local function Load()
 				if Environment.Settings.ThirdPerson then
 					Environment.Settings.ThirdPersonSensitivity = mathclamp(Environment.Settings.ThirdPersonSensitivity, 0.1, 5)
 
-					local Vector = Camera:WorldToViewportPoint(Environment.Locked.Character[Environment.Settings.LockPart].Position)
+					local aimPart = Environment.Locked.Character[Environment.Settings.LockPart]
+					local velocity = aimPart.AssemblyLinearVelocity or aimPart.Velocity or Vector3.new()
+					local predPos = aimPart.Position + velocity * Environment.Settings.Prediction
+					local Vector = Camera:WorldToViewportPoint(predPos)
 					
 					if mousemoverel then
 						mousemoverel(
-							(Vector.X - UserInputService:GetMouseLocation().X) * Environment.Settings.ThirdPersonSensitivity,
-							(Vector.Y - UserInputService:GetMouseLocation().Y) * Environment.Settings.ThirdPersonSensitivity
+							(Vector.X - UserInputService:GetMouseLocation().X) / Environment.Settings.Smoothness,
+							(Vector.Y - UserInputService:GetMouseLocation().Y) / Environment.Settings.Smoothness
 						)
 					end
-				else
-					if Environment.Settings.Sensitivity > 0 then
-						Animation = TweenService:Create(Camera, TweenInfo.new(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-							CFrame = CFrame.new(Camera.CFrame.Position, Environment.Locked.Character[Environment.Settings.LockPart].Position)
-						})
-						Animation:Play()
-					else
-						Camera.CFrame = CFrame.new(Camera.CFrame.Position, Environment.Locked.Character[Environment.Settings.LockPart].Position)
-					end
 				end
-
 				Environment.FOVCircle.Color = Environment.FOVSettings.LockedColor
 			end
 		end
@@ -232,13 +227,15 @@ function Environment.Functions:ResetSettings()
 		AliveCheck = true,
 		WallCheck = false,
 		Sensitivity = 0,
-		ThirdPerson = false,
+		ThirdPerson = true,
 		ThirdPersonSensitivity = 3,
 		TriggerKey = "MouseButton2",
 		Toggle = false,
 		LockPart = "Head",
 		DistanceCheck = true,
-		MaxDistance = 500
+		MaxDistance = 500,
+		Prediction = 0.135,
+		Smoothness = 5
 	}
 
 	Environment.FOVSettings = {
