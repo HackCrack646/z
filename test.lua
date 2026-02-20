@@ -1,257 +1,319 @@
--- esp.lua - ESP rendering with world-to-screen projection
--- Luau version for Roblox script execution
+-- esp_lib.lua - ESP Library em Luau (adaptado do C++)
 
-local ESP = {}
-local settings = {
-    enabled = false,
-    showBox = true,
-    showNames = true,
-    showHealth = true,
-    showDistance = true,
-    showSnapline = false,
-    showDead = false,
-    maxDistance = 1000,
-    espCol = {1, 1, 1} -- RGB from 0-1
+local ESP_Lib = {}
+ESP_Lib.__index = ESP_Lib
+
+-- Configurações padrão
+ESP_Lib.settings = {
+    enabled = true,
+    show_names = true,
+    show_box = true,
+    color = Color3.new(0, 1, 0), -- Verde
+    max_distance = 1000,
+    box_thickness = 1.5,
+    fill_box = false,
+    fill_color = Color3.new(0, 0, 0)
 }
 
-ESP.settings = settings
+-- Cache de jogadores
+local cached_players = {}
+local last_player_update = 0
+local local_player = nil
 
--- World to Screen using ViewMatrix (assumes you have a function to get view matrix)
-local function worldToScreen(pos, vm, screenW, screenH)
-    local x = pos[1] * vm[1] + pos[2] * vm[2] + pos[3] * vm[3] + vm[4]
-    local y = pos[1] * vm[5] + pos[2] * vm[6] + pos[3] * vm[7] + vm[8]
-    local w = pos[1] * vm[13] + pos[2] * vm[14] + pos[3] * vm[15] + vm[16]
+-- Função auxiliar para ler strings (adaptada para Roblox)
+local function readString(instance)
+    if not instance then return "???" end
+    local success, result = pcall(function()
+        return instance.Name
+    end)
+    return success and result or "???"
+end
+
+-- Obtém nome da classe da instância
+local function getInstanceClassName(instance)
+    if not instance then return "???" end
+    local success, result = pcall(function()
+        return instance.ClassName
+    end)
+    return success and result or "???"
+end
+
+-- Encontra o primeiro filho por nome
+local function findFirstChild(instance, childName)
+    if not instance then return nil end
     
-    if w < 0.1 then return false end
+    local cache_key = tostring(instance) .. "_children"
+    local cache_time_key = tostring(instance) .. "_time"
     
-    local invW = 1 / w
-    x = x * invW
-    y = y * invW
+    local now = tick()
+    local children = cached_players[cache_key] or {}
+    local last_update = cached_players[cache_time_key] or 0
     
-    local outX = (screenW * 0.5) + (x * screenW * 0.5)
-    local outY = (screenH * 0.5) - (y * screenH * 0.5)
-    
-    -- Basic screen clipping
-    if outX > -1000 and outX < screenW + 1000 and outY > -1000 and outY < screenH + 1000 then
-        return true, outX, outY
+    if #children == 0 or now - last_update > 1 then
+        children = {}
+        
+        local success, result = pcall(function()
+            local children_list = {}
+            for _, child in ipairs(instance:GetChildren()) do
+                table.insert(children_list, {child, child.Name})
+            end
+            return children_list
+        end)
+        
+        if success then
+            children = result
+        end
+        
+        cached_players[cache_key] = children
+        cached_players[cache_time_key] = now
     end
-    return false
-end
-
--- Distance between two 3D points
-local function distance3D(a, b)
-    local dx = a[1] - b[1]
-    local dy = a[2] - b[2]
-    local dz = a[3] - b[3]
-    return math.sqrt(dx*dx + dy*dy + dz*dz)
-end
-
--- Get color from health percentage (returns RGB values 0-1)
-local function healthColor(health, maxHealth)
-    if maxHealth <= 0 then return 1, 1, 1 end
-    local pct = math.clamp(health / maxHealth, 0, 1)
     
-    -- Green to red gradient
-    local r = (1 - pct)
-    local g = pct
-    return r, g, 0
-end
-
--- Main render function
-function ESP:render()
-    if not settings.enabled then return end
-    
-    -- Get required data from your Roblox wrapper functions
-    local vm = getViewMatrix() -- You need to implement this
-    local players = getPlayers() -- You need to implement this
-    local screenW, screenH = getScreenSize() -- You need to implement this
-    
-    if screenW <= 0 or screenH <= 0 then return end
-    
-    -- Get local player position
-    local localPos = {0, 0, 0}
-    local localID = nil
-    
-    for _, player in ipairs(players) do
-        if player.isLocalPlayer then
-            localPos = {player.rootPos[1], player.rootPos[2], player.rootPos[3]}
-            localID = player.ptr
-            break
+    for _, child_data in ipairs(children) do
+        if child_data[2] == childName then
+            return child_data[1]
         end
     end
     
-    for _, player in ipairs(players) do
-        -- Skip self and invalid players
-        if player.isLocalPlayer or player.ptr == localID then continue end
-        if not player.valid then continue end
+    return nil
+end
+
+-- Encontra o primeiro filho por classe
+local function findFirstChildByClass(instance, className)
+    if not instance then return nil end
+    
+    local cache_key = tostring(instance) .. "_class_" .. className
+    local cache_time_key = tostring(instance) .. "_time"
+    
+    local now = tick()
+    local children = cached_players[cache_key] or {}
+    local last_update = cached_players[cache_time_key] or 0
+    
+    if #children == 0 or now - last_update > 1 then
+        children = {}
         
-        -- Filter dead players
-        if not settings.showDead and (player.health or 0) <= 0.1 then continue end
-        
-        -- Filter garbage positions
-        local rootPos = player.rootPos or {0, 0, 0}
-        if rootPos[1] == 0 and rootPos[2] == 0 and rootPos[3] == 0 then continue end
-        if math.abs(rootPos[1]) > 50000 or math.abs(rootPos[2]) > 50000 or math.abs(rootPos[3]) > 50000 then continue end
-        
-        local dist = distance3D(localPos, rootPos)
-        if dist > settings.maxDistance then continue end
-        
-        -- Select color
-        local colorR, colorG, colorB = settings.espCol[1], settings.espCol[2], settings.espCol[3]
-        
-        local boxX, boxY, boxW, boxH
-        local headScreenX, headScreenY, feetScreenX, feetScreenY
-        
-        if player.hasLimbs then
-            -- Dynamic Box from Limbs
-            local screenPoints = {}
-            local validPoints = {}
-            local validCount = 0
-            
-            local worldPoints = {
-                player.headPos or rootPos,
-                rootPos,
-                player.lFoot or rootPos,
-                player.rFoot or rootPos,
-                player.lHand or rootPos,
-                player.rHand or rootPos
-            }
-            
-            -- Project all available points
-            for i = 1, 6 do
-                local wp = {worldPoints[i][1], worldPoints[i][2], worldPoints[i][3]}
-                if i == 1 then wp[2] = wp[2] + 0.8 end -- Head top padding
-                if i == 3 or i == 4 then wp[2] = wp[2] - 0.5 end -- Feet bottom padding
-                
-                local success, sx, sy = worldToScreen(wp, vm, screenW, screenH)
-                validPoints[i] = success
-                if success then
-                    screenPoints[i] = {sx, sy}
-                    validCount = validCount + 1
+        local success, result = pcall(function()
+            local children_list = {}
+            for _, child in ipairs(instance:GetChildren()) do
+                if child.ClassName == className then
+                    table.insert(children_list, {child, child.ClassName})
                 end
             end
-            
-            -- Strict clipping check
-            if not validPoints[1] or not validPoints[2] or validCount < 4 then continue end
-            
-            local minX, minY = 10000, 10000
-            local maxX, maxY = -10000, -10000
-            
-            for i = 1, 6 do
-                if not validPoints[i] then continue end
-                minX = math.min(minX, screenPoints[i][1])
-                maxX = math.max(maxX, screenPoints[i][1])
-                minY = math.min(minY, screenPoints[i][2])
-                maxY = math.max(maxY, screenPoints[i][2])
-            end
-            
-            -- Add padding
-            local padX = (maxX - minX) * 0.15
-            local padY = (maxY - minY) * 0.05
-            
-            boxX = minX - padX
-            boxY = minY - padY
-            boxW = (maxX - minX) + (padX * 2)
-            boxH = (maxY - minY) + (padY * 2)
-            
-            -- Set head/feet screen positions
-            headScreenX = boxX + boxW * 0.5
-            headScreenY = boxY
-            feetScreenX = boxX + boxW * 0.5
-            feetScreenY = boxY + boxH
-        else
-            -- Fallback: Static Height-Width
-            local feetPos = {rootPos[1], rootPos[2] - 3, rootPos[3]}
-            local headTopPos = {rootPos[1], rootPos[2] + 2.5, rootPos[3]}
-            
-            local headSuccess, headSX, headSY = worldToScreen(headTopPos, vm, screenW, screenH)
-            local feetSuccess, feetSX, feetSY = worldToScreen(feetPos, vm, screenW, screenH)
-            
-            if not headSuccess or not feetSuccess then continue end
-            
-            headScreenX, headScreenY = headSX, headSY
-            feetScreenX, feetScreenY = feetSX, feetSY
-            
-            boxH = feetSY - headSY
-            if math.abs(boxH) < 1 then continue end
-            
-            boxW = boxH * 0.55
-            boxX = headSX - boxW * 0.5
-            boxY = headSY
+            return children_list
+        end)
+        
+        if success then
+            children = result
         end
         
-        -- Sanity check box dimensions
-        if boxW > screenW * 0.9 or boxH > screenH * 0.9 or boxW < 0.1 or boxH < 0.1 then continue end
-        if boxX < -screenW or boxX > screenW*2 or boxY < -screenH or boxY > screenH*2 then continue end
-        
-        -- Bounding Box
-        if settings.showBox then
-            -- Outline
-            drawRect(boxX - 1, boxY - 1, boxW + 2, boxH + 2, 0, 0, 0, 200) -- You need to implement drawing
-            -- Main box
-            drawRect(boxX, boxY, boxW, boxH, colorR*255, colorG*255, colorB*255, 255)
-        end
-        
-        -- Snapline
-        if settings.showSnapline then
-            drawLine(screenW * 0.5, screenH, headScreenX, feetScreenY, 255, 255, 255, 255, 1)
-        end
-        
-        -- Player Name
-        if settings.showNames and player.name and player.name ~= "" then
-            local textWidth = getTextWidth(player.name) -- You need to implement text metrics
-            local textHeight = getTextHeight(player.name)
-            local textX = headScreenX - textWidth * 0.5
-            local textY = boxY - textHeight - 4
-            
-            -- Shadow
-            drawText(textX + 1, textY + 1, player.name, 0, 0, 0, 200)
-            drawText(textX, textY, player.name, 255, 255, 255, 255)
-        end
-        
-        -- Health Bar
-        if settings.showHealth then
-            local barW = 3
-            local barX = boxX - barW - 3
-            local healthPct = (player.maxHealth and player.maxHealth > 0.1) and math.clamp(player.health / player.maxHealth, 0, 1) or 0
-            
-            local filledH = boxH * healthPct
-            
-            -- Background
-            drawRectFilled(barX, boxY, barW, boxH, 0, 0, 0, 180)
-            -- Health fill
-            local hR, hG, hB = healthColor(player.health or 100, player.maxHealth or 100)
-            drawRectFilled(barX, boxY + boxH - filledH, barW, filledH, hR*255, hG*255, hB*255, 255)
-            -- Outline
-            drawRect(barX, boxY, barW, boxH, 0, 0, 0, 255)
-        end
-        
-        -- Distance
-        if settings.showDistance then
-            local distText = string.format("[%.0fm]", dist)
-            local textWidth = getTextWidth(distText)
-            local textHeight = getTextHeight(distText)
-            local textX = headScreenX - textWidth * 0.5
-            local textY = boxY + boxH + 2
-            
-            -- Shadow
-            drawText(textX + 1, textY + 1, distText, 0, 0, 0, 200)
-            drawText(textX, textY, distText, 200, 200, 200, 255)
+        cached_players[cache_key] = children
+        cached_players[cache_time_key] = now
+    end
+    
+    for _, child_data in ipairs(children) do
+        if child_data[2] == className then
+            return child_data[1]
         end
     end
     
-    -- Aimbot FOV Circle (if you have aimbot settings)
-    if aimbotSettings and aimbotSettings.enabled and aimbotSettings.drawFov then
-        local mouseX, mouseY = getMousePosition() -- You need to implement mouse position
-        drawCircle(mouseX, mouseY, aimbotSettings.fov, 255, 255, 255, 255, 64, 1)
+    return nil
+end
+
+-- Obtém todos os jogadores
+function ESP_Lib:GetPlayers()
+    local now = tick()
+    local players = game:GetService("Players")
+    local localPlayer = players.LocalPlayer
+    
+    -- Atualiza a cada 2 segundos
+    if now - last_player_update > 2 or #cached_players == 0 then
+        cached_players = {}
+        
+        for _, player in ipairs(players:GetPlayers()) do
+            if player ~= localPlayer then
+                local player_data = {
+                    address = player,
+                    valid = false,
+                    name = player.Name
+                }
+                
+                -- Verifica se tem character
+                local character = player.Character
+                if character then
+                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                    if humanoidRootPart then
+                        player_data.position = humanoidRootPart.Position
+                        player_data.valid = true
+                        
+                        -- Cabeça
+                        local head = character:FindFirstChild("Head")
+                        if head then
+                            player_data.head_position = head.Position
+                        else
+                            player_data.head_position = humanoidRootPart.Position + Vector3.new(0, 2.5, 0)
+                        end
+                        
+                        -- Pés
+                        player_data.feet_position = humanoidRootPart.Position - Vector3.new(0, 4.5, 0)
+                        
+                        table.insert(cached_players, player_data)
+                    end
+                end
+            end
+        end
+        
+        last_player_update = now
+    end
+    
+    return cached_players
+end
+
+-- Calcula distância até o jogador local
+function ESP_Lib:CalculateDistance(targetPos)
+    local localPlayer = game:GetService("Players").LocalPlayer
+    if not localPlayer or not localPlayer.Character then return 1000 end
+    
+    local humanoidRootPart = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return 1000 end
+    
+    return (humanoidRootPart.Position - targetPos).Magnitude
+end
+
+-- Obtém matriz de visão da câmera
+function ESP_Lib:GetViewMatrix()
+    local camera = workspace.CurrentCamera
+    return {
+        camera.CFrame,
+        camera.ViewportSize
+    }
+end
+
+-- Converte coordenadas 3D para 2D (WorldToScreen)
+function ESP_Lib:WorldToScreen(worldPos, viewMatrix)
+    local camera = workspace.CurrentCamera
+    local vector, onScreen = camera:WorldToScreenPoint(worldPos)
+    
+    if onScreen and vector.Z > 0 then
+        return true, Vector2.new(vector.X, vector.Y)
+    end
+    return false, Vector2.new(0, 0)
+end
+
+-- Desenha a caixa do jogador
+function ESP_Lib:DrawPlayerBox(drawList, player, screenPos, distance)
+    local headScreen, feetScreen
+    local success1, headPos = self:WorldToScreen(player.head_position, nil)
+    local success2, feetPos = self:WorldToScreen(player.feet_position, nil)
+    
+    if not success1 or not success2 then return end
+    
+    local height = math.abs(feetPos.Y - headPos.Y)
+    local width = height * 0.35
+    
+    -- Limites mínimos e máximos
+    width = math.clamp(width, 25, 60)
+    height = math.clamp(height, 50, 120)
+    
+    local verticalOffset = 17
+    
+    local topLeft = Vector2.new(
+        headPos.X - width / 2,
+        headPos.Y - verticalOffset
+    )
+    local bottomRight = Vector2.new(
+        headPos.X + width / 2,
+        feetPos.Y - verticalOffset
+    )
+    
+    local espColor = self.settings.color
+    local fillColor = self.settings.fill_color
+    
+    if self.settings.fill_box then
+        drawList:FilledRect(topLeft, bottomRight, fillColor)
+    end
+    
+    -- Desenha a caixa principal
+    drawList:Rect(topLeft, bottomRight, espColor, self.settings.box_thickness)
+    
+    -- Cantos decorativos
+    local cornerSize = 4
+    local white = Color3.new(1, 1, 1)
+    
+    -- Canto superior esquerdo
+    drawList:Line(topLeft, Vector2.new(topLeft.X + cornerSize, topLeft.Y), espColor, self.settings.box_thickness)
+    drawList:Line(topLeft, Vector2.new(topLeft.X, topLeft.Y + cornerSize), espColor, self.settings.box_thickness)
+    
+    -- Canto superior direito
+    drawList:Line(Vector2.new(bottomRight.X, topLeft.Y), Vector2.new(bottomRight.X - cornerSize, topLeft.Y), espColor, self.settings.box_thickness)
+    drawList:Line(Vector2.new(bottomRight.X, topLeft.Y), Vector2.new(bottomRight.X, topLeft.Y + cornerSize), espColor, self.settings.box_thickness)
+    
+    -- Canto inferior esquerdo
+    drawList:Line(Vector2.new(topLeft.X, bottomRight.Y), Vector2.new(topLeft.X + cornerSize, bottomRight.Y), espColor, self.settings.box_thickness)
+    drawList:Line(Vector2.new(topLeft.X, bottomRight.Y), Vector2.new(topLeft.X, bottomRight.Y - cornerSize), espColor, self.settings.box_thickness)
+    
+    -- Canto inferior direito
+    drawList:Line(bottomRight, Vector2.new(bottomRight.X - cornerSize, bottomRight.Y), espColor, self.settings.box_thickness)
+    drawList:Line(bottomRight, Vector2.new(bottomRight.X, bottomRight.Y - cornerSize), espColor, self.settings.box_thickness)
+end
+
+-- Desenha o nome do jogador
+function ESP_Lib:DrawPlayerName(drawList, player, screenPos, distance)
+    local success, headPos = self:WorldToScreen(player.head_position, nil)
+    if not success then return end
+    
+    local nameOffsetY = 25
+    local textSize = drawList:GetTextSize(player.name, 16)
+    
+    local namePos = Vector2.new(
+        headPos.X - textSize.X / 2,
+        headPos.Y - nameOffsetY - textSize.Y
+    )
+    
+    -- Fundo do texto
+    drawList:FilledRect(
+        Vector2.new(namePos.X - 2, namePos.Y - 1),
+        Vector2.new(namePos.X + textSize.X + 2, namePos.Y + textSize.Y + 1),
+        Color3.new(0, 0, 0),
+        0.7
+    )
+    
+    -- Texto
+    drawList:Text(namePos, player.name, self.settings.color, 16)
+end
+
+-- Função principal de renderização
+function ESP_Lib:Render(drawList)
+    if not self.settings.enabled then return end
+    
+    -- Verifica se o jogo atual é Roblox
+    if not game:GetService("CoreGui"):FindFirstChild("RobloxGui") then return end
+    
+    local players = self:GetPlayers()
+    if #players == 0 then return end
+    
+    for _, player in ipairs(players) do
+        if not player.valid then continue end
+        
+        local success, screenPos = self:WorldToScreen(player.position, nil)
+        if success then
+            local distance = self:CalculateDistance(player.position)
+            
+            if distance <= self.settings.max_distance then
+                if self.settings.show_box then
+                    self:DrawPlayerBox(drawList, player, screenPos, distance)
+                end
+                
+                if self.settings.show_names then
+                    self:DrawPlayerName(drawList, player, screenPos, distance)
+                end
+            end
+        end
     end
 end
 
--- Helper function to clamp values (if not already defined)
-if not math.clamp then
-    function math.clamp(value, min, max)
-        return math.max(min, math.min(max, value))
-    end
+-- Função de utilidade
+function math.clamp(value, min, max)
+    return math.max(min, math.min(max, value))
 end
 
-return ESP
+-- Retorna a lib
+return ESP_Lib
