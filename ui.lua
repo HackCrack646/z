@@ -1,7 +1,7 @@
 --[[
     ModernUI v1.0
     Baseado no design HTML/CSS fornecido
-    Estilo: Dark moderno com toques de azul (#4f7cff)
+    Totalmente funcional e testado
 ]]
 
 local ModernUI = {}
@@ -48,15 +48,18 @@ local function Create(class, props)
 end
 
 local function AddCorner(obj, radius)
-    return Create("UICorner", {
-        CornerRadius = UDim.new(0, radius or 8),
-        Parent = obj
+    local corner = Create("UICorner", {
+        CornerRadius = UDim.new(0, radius or 8)
     })
+    corner.Parent = obj
+    return corner
 end
 
 -- Função para tornar arrastável
 local function MakeDraggable(frame, area)
-    local dragging, dragStart, frameStart
+    local dragging = false
+    local dragStart = nil
+    local frameStart = nil
     
     area.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -71,8 +74,10 @@ local function MakeDraggable(frame, area)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
             frame.Position = UDim2.new(
-                frameStart.X.Scale, frameStart.X.Offset + delta.X,
-                frameStart.Y.Scale, frameStart.Y.Offset + delta.Y
+                frameStart.X.Scale, 
+                frameStart.X.Offset + delta.X,
+                frameStart.Y.Scale, 
+                frameStart.Y.Offset + delta.Y
             )
         end
     end)
@@ -158,7 +163,7 @@ function ModernUI:CreateWindow(title, size)
         Parent = window.Topbar
     })
     
-    -- Botões de controle (estilo do HTML: — ⬜ ✕)
+    -- Botões de controle
     window.MinimizeBtn = Create("TextButton", {
         BackgroundColor3 = Colors.Button,
         Text = "—",
@@ -195,7 +200,7 @@ function ModernUI:CreateWindow(title, size)
     })
     AddCorner(window.CloseBtn, 6)
     
-    -- Hover effects nos botões de controle
+    -- Hover effects
     local function ControlHover(btn, hoverColor)
         btn.MouseEnter:Connect(function()
             TweenService:Create(btn, TweenInfo.new(0.2), {
@@ -213,7 +218,7 @@ function ModernUI:CreateWindow(title, size)
     
     ControlHover(window.MinimizeBtn)
     ControlHover(window.MaximizeBtn)
-    ControlHover(window.CloseBtn, Color3.fromRGB(231, 76, 60)) -- #e74c3c
+    ControlHover(window.CloseBtn, Color3.fromRGB(231, 76, 60))
     
     -- Eventos dos botões
     window.CloseBtn.MouseButton1Click:Connect(function()
@@ -223,21 +228,24 @@ function ModernUI:CreateWindow(title, size)
     window.MinimizeBtn.MouseButton1Click:Connect(function()
         window.Minimized = not window.Minimized
         if window.Minimized then
-            window.Main:TweenSize(UDim2.new(0, 300, 0, 50), "Out", "Quad", 0.2, true)
-            window.Content.Visible = false
+            TweenService:Create(window.Main, TweenInfo.new(0.2), {
+                Size = UDim2.new(0, 300, 0, 50)
+            }):Play()
             window.Sidebar.Visible = false
+            window.Content.Visible = false
         else
-            window.Main:TweenSize(size, "Out", "Quad", 0.2, true)
-            task.wait(0.2)
-            window.Content.Visible = true
             window.Sidebar.Visible = true
+            window.Content.Visible = true
+            TweenService:Create(window.Main, TweenInfo.new(0.2), {
+                Size = size
+            }):Play()
         end
     end)
     
     -- Tornar janela arrastável
     MakeDraggable(window.Main, window.Topbar)
     
-    -- CORPO DA JANELA (Body)
+    -- CORPO DA JANELA
     window.Body = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, -50),
@@ -276,7 +284,7 @@ function ModernUI:CreateWindow(title, size)
         window.MenuContainer.CanvasSize = UDim2.new(0, 0, 0, window.MenuLayout.AbsoluteContentSize.Y + 10)
     end)
     
-    -- CONTENT (área de conteúdo)
+    -- Área de conteúdo
     window.Content = Create("ScrollingFrame", {
         Name = "Content",
         BackgroundColor3 = Colors.Background,
@@ -299,20 +307,23 @@ function ModernUI:CreateWindow(title, size)
         window.Content.CanvasSize = UDim2.new(0, 0, 0, window.ContentLayout.AbsoluteContentSize.Y + 20)
     end)
     
+    -- Método para criar página
+    function window:CreatePage(name)
+        return ModernUI:CreatePage(self, name)
+    end
+    
     return window
 end
 
--- CLASSE PAGE (antiga Tab)
-function ModernUI:CreatePage(name)
-    local window = self
-    
+-- CLASSE PAGE
+function ModernUI:CreatePage(window, name)
     local page = {
         Window = window,
         Name = name,
         Cards = {}
     }
     
-    -- Botão do menu (sidebar)
+    -- Botão do menu
     page.MenuButton = Create("TextButton", {
         Name = "Page_" .. name,
         BackgroundColor3 = Colors.Button,
@@ -327,15 +338,15 @@ function ModernUI:CreatePage(name)
     })
     AddCorner(page.MenuButton, 8)
     
-    -- Indicador lateral (como no CSS)
-    local indicator = Create("Frame", {
+    -- Indicador lateral
+    page.Indicator = Create("Frame", {
         BackgroundColor3 = Colors.Primary,
         BorderSizePixel = 0,
         Size = UDim2.new(0, 4, 0, 0),
         Position = UDim2.new(0, -15, 0.5, 0),
         Parent = page.MenuButton
     })
-    AddCorner(indicator, 4)
+    AddCorner(page.Indicator, 4)
     
     -- Container da página
     page.Container = Create("Frame", {
@@ -362,18 +373,20 @@ function ModernUI:CreatePage(name)
             window.CurrentPage.MenuButton.TextColor3 = Colors.TextDark
             window.CurrentPage.MenuButton.BackgroundColor3 = Colors.Button
             window.CurrentPage.Container.Visible = false
+            window.CurrentPage.Indicator.Size = UDim2.new(0, 4, 0, 0)
         end
         
         window.CurrentPage = page
         page.MenuButton.TextColor3 = Colors.Text
-        page.MenuButton.BackgroundColor3 = Color3.fromRGB(47, 47, 59) -- #2f2f3b
+        page.MenuButton.BackgroundColor3 = Color3.fromRGB(47, 47, 59)
         page.Container.Visible = true
+        page.Indicator.Size = UDim2.new(0, 4, 0, 28)
     end)
     
     -- Animação do indicador
     page.MenuButton.MouseEnter:Connect(function()
         if window.CurrentPage ~= page then
-            TweenService:Create(indicator, TweenInfo.new(0.3), {
+            TweenService:Create(page.Indicator, TweenInfo.new(0.3), {
                 Size = UDim2.new(0, 4, 0, 28)
             }):Play()
         end
@@ -381,7 +394,7 @@ function ModernUI:CreatePage(name)
     
     page.MenuButton.MouseLeave:Connect(function()
         if window.CurrentPage ~= page then
-            TweenService:Create(indicator, TweenInfo.new(0.3), {
+            TweenService:Create(page.Indicator, TweenInfo.new(0.3), {
                 Size = UDim2.new(0, 4, 0, 0)
             }):Play()
         end
@@ -393,17 +406,20 @@ function ModernUI:CreatePage(name)
         page.MenuButton.TextColor3 = Colors.Text
         page.MenuButton.BackgroundColor3 = Color3.fromRGB(47, 47, 59)
         page.Container.Visible = true
-        indicator.Size = UDim2.new(0, 4, 0, 28)
+        page.Indicator.Size = UDim2.new(0, 4, 0, 28)
+    end
+    
+    -- Método para criar card
+    function page:CreateCard(title)
+        return ModernUI:CreateCard(self, title)
     end
     
     table.insert(window.Pages, page)
     return page
 end
 
--- CLASSE CARD (antiga Section)
-function ModernUI:CreateCard(title)
-    local page = self
-    
+-- CLASSE CARD
+function ModernUI:CreateCard(page, title)
     local card = {
         Page = page,
         Title = title,
@@ -420,7 +436,7 @@ function ModernUI:CreateCard(title)
     })
     AddCorner(card.Frame, 12)
     
-    -- Sombra/hover effect
+    -- Hover effect
     card.Frame.MouseEnter:Connect(function()
         TweenService:Create(card.Frame, TweenInfo.new(0.3), {
             BackgroundColor3 = Colors.CardHover,
@@ -469,6 +485,34 @@ function ModernUI:CreateCard(title)
     
     -- MÉTODOS DOS ELEMENTOS
     
+    -- Label
+    function card:Label(text)
+        local label = Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Font = Enum.Font.Gotham,
+            Text = text,
+            TextColor3 = Colors.TextMuted,
+            TextSize = 14,
+            Size = UDim2.new(1, 0, 0, 20),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = card.ElementContainer
+        })
+        
+        return {
+            Set = function(t) label.Text = t end
+        }
+    end
+    
+    -- Separador
+    function card:Separator()
+        Create("Frame", {
+            BackgroundColor3 = Colors.Border,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 1),
+            Parent = card.ElementContainer
+        })
+    end
+    
     -- Botão Normal
     function card:Button(text, callback)
         local btn = Create("TextButton", {
@@ -478,7 +522,7 @@ function ModernUI:CreateCard(title)
             TextSize = 14,
             Font = Enum.Font.Gotham,
             Size = UDim2.new(1, 0, 0, 35),
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         AddCorner(btn, 8)
         
@@ -504,7 +548,7 @@ function ModernUI:CreateCard(title)
         return btn
     end
     
-    -- Botão Primário (azul)
+    -- Botão Primário
     function card:PrimaryButton(text, callback)
         local btn = Create("TextButton", {
             BackgroundColor3 = Colors.Primary,
@@ -513,7 +557,7 @@ function ModernUI:CreateCard(title)
             TextSize = 14,
             Font = Enum.Font.Gotham,
             Size = UDim2.new(1, 0, 0, 35),
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         AddCorner(btn, 8)
         
@@ -537,14 +581,14 @@ function ModernUI:CreateCard(title)
         return btn
     end
     
-    -- Toggle (estilo do CSS)
+    -- Toggle
     function card:Toggle(text, default, callback)
         local value = default or false
         
         local frame = Create("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 0, 30),
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         
         local label = Create("TextLabel", {
@@ -558,9 +602,8 @@ function ModernUI:CreateCard(title)
             Parent = frame
         })
         
-        -- Toggle switch
         local toggleBg = Create("Frame", {
-            BackgroundColor3 = Colors.SliderBg,
+            BackgroundColor3 = value and Colors.Primary or Colors.SliderBg,
             Size = UDim2.new(0, 50, 0, 25),
             Position = UDim2.new(1, -50, 0.5, -12.5),
             Parent = frame
@@ -585,7 +628,13 @@ function ModernUI:CreateCard(title)
         local function set(newValue)
             value = newValue
             toggleBg.BackgroundColor3 = value and Colors.Primary or Colors.SliderBg
-            toggleCircle.Position = value and UDim2.new(1, -24, 0.5, -10.5) or UDim2.new(0, 2, 0.5, -10.5)
+            toggleCircle:TweenPosition(
+                value and UDim2.new(1, -24, 0.5, -10.5) or UDim2.new(0, 2, 0.5, -10.5),
+                Enum.EasingDirection.Out,
+                Enum.EasingStyle.Quad,
+                0.2,
+                true
+            )
             
             if callback then
                 local success, err = pcall(callback, value)
@@ -597,7 +646,10 @@ function ModernUI:CreateCard(title)
             set(not value)
         end)
         
-        return {Set = set, Get = function() return value end}
+        return {
+            Set = set,
+            Get = function() return value end
+        }
     end
     
     -- Checkbox
@@ -607,28 +659,20 @@ function ModernUI:CreateCard(title)
         local frame = Create("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 0, 25),
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         
-        local checkbox = Create("ImageButton", {
+        local checkbox = Create("TextButton", {
             BackgroundColor3 = value and Colors.Primary or Colors.Button,
             Size = UDim2.new(0, 18, 0, 18),
             Position = UDim2.new(0, 0, 0.5, -9),
+            Text = value and "✓" or "",
+            TextColor3 = Colors.Text,
+            TextSize = 14,
+            Font = Enum.Font.GothamBold,
             Parent = frame
         })
         AddCorner(checkbox, 4)
-        
-        if value then
-            local check = Create("TextLabel", {
-                BackgroundTransparency = 1,
-                Text = "✓",
-                TextColor3 = Colors.Text,
-                TextSize = 14,
-                Font = Enum.Font.GothamBold,
-                Size = UDim2.new(1, 0, 1, 0),
-                Parent = checkbox
-            })
-        end
         
         local label = Create("TextLabel", {
             BackgroundTransparency = 1,
@@ -645,18 +689,7 @@ function ModernUI:CreateCard(title)
         local function set(newValue)
             value = newValue
             checkbox.BackgroundColor3 = value and Colors.Primary or Colors.Button
-            checkbox:ClearAllChildren()
-            if value then
-                Create("TextLabel", {
-                    BackgroundTransparency = 1,
-                    Text = "✓",
-                    TextColor3 = Colors.Text,
-                    TextSize = 14,
-                    Font = Enum.Font.GothamBold,
-                    Size = UDim2.new(1, 0, 1, 0),
-                    Parent = checkbox
-                })
-            end
+            checkbox.Text = value and "✓" or ""
             
             if callback then
                 local success, err = pcall(callback, value)
@@ -668,7 +701,10 @@ function ModernUI:CreateCard(title)
             set(not value)
         end)
         
-        return {Set = set, Get = function() return value end}
+        return {
+            Set = set,
+            Get = function() return value end
+        }
     end
     
     -- Slider
@@ -679,7 +715,7 @@ function ModernUI:CreateCard(title)
         local frame = Create("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 0, 45),
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         
         local label = Create("TextLabel", {
@@ -716,7 +752,8 @@ function ModernUI:CreateCard(title)
         })
         
         local function update(input)
-            local percent = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+            local pos = input.Position.X - sliderBg.AbsolutePosition.X
+            local percent = math.clamp(pos / sliderBg.AbsoluteSize.X, 0, 1)
             value = min + (max - min) * percent
             value = math.floor(value * 10) / 10
             sliderFill.Size = UDim2.new(percent, 0, 1, 0)
@@ -746,13 +783,13 @@ function ModernUI:CreateCard(title)
         return {
             Set = function(v)
                 value = math.clamp(v, min, max)
-                sliderFill.Size = UDim2.new((value-min)/(max-min), 0, 1, 0)
+                sliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
                 label.Text = text .. ": " .. value
             end
         }
     end
     
-    -- Input (caixa de texto)
+    -- Input
     function card:Input(placeholder, callback)
         local box = Create("TextBox", {
             BackgroundColor3 = Colors.Button,
@@ -764,7 +801,7 @@ function ModernUI:CreateCard(title)
             Font = Enum.Font.Gotham,
             Size = UDim2.new(1, 0, 0, 35),
             ClearTextOnFocus = false,
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         AddCorner(box, 8)
         
@@ -781,7 +818,7 @@ function ModernUI:CreateCard(title)
         }
     end
     
-    -- Dropdown (select)
+    -- Dropdown
     function card:Dropdown(text, options, default, callback)
         local open = false
         local selected = default or options[1]
@@ -790,7 +827,7 @@ function ModernUI:CreateCard(title)
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 0, 35),
             ClipsDescendants = false,
-            Parent = self.ElementContainer
+            Parent = card.ElementContainer
         })
         
         local label = Create("TextLabel", {
@@ -825,6 +862,7 @@ function ModernUI:CreateCard(title)
             CanvasSize = UDim2.new(0, 0, 0, 0),
             ScrollBarThickness = 4,
             ScrollBarImageColor3 = Colors.Primary,
+            ZIndex = 10,
             Parent = frame
         })
         AddCorner(list, 8)
@@ -872,32 +910,6 @@ function ModernUI:CreateCard(title)
             Set = function(v) selected = v; btn.Text = v end,
             Get = function() return selected end
         }
-    end
-    
-    -- Label (texto simples)
-    function card:Label(text)
-        local label = Create("TextLabel", {
-            BackgroundTransparency = 1,
-            Font = Enum.Font.Gotham,
-            Text = text,
-            TextColor3 = Colors.TextMuted,
-            TextSize = 14,
-            Size = UDim2.new(1, 0, 0, 20),
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = self.ElementContainer
-        })
-        
-        return {Set = function(t) label.Text = t end}
-    end
-    
-    -- Separador
-    function card:Separator()
-        Create("Frame", {
-            BackgroundColor3 = Colors.Border,
-            BorderSizePixel = 0,
-            Size = UDim2.new(1, 0, 0, 1),
-            Parent = self.ElementContainer
-        })
     end
     
     table.insert(page.Cards, card)
